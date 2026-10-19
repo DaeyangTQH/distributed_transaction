@@ -5,6 +5,7 @@ import com.haichan.dto.LoginResponse;
 import com.haichan.entity.StoreAccount;
 import com.haichan.exception.AuthException;
 import com.haichan.repository.StoreAccountRepository;
+import com.haichan.security.JwtService;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.stereotype.Service;
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Service;
 public class AccountService {
 
     StoreAccountRepository storeAccountRepository;
+    JwtService jwtService;
 
     public LoginResponse login(LoginRequest request) {
         StoreAccount account = storeAccountRepository.findByUsername(request.getUsername())
@@ -28,11 +30,14 @@ public class AccountService {
             throw new AuthException("Account is inactive");
         }
 
+        String token = jwtService.generateToken(account);
+
         return LoginResponse.builder()
                 .username(account.getUsername())
                 .email(account.getEmail())
                 .role(account.getRole())
                 .roleName(resolveRoleName(account.getRole()))
+                .token(token)
                 .message("Login successful")
                 .build();
     }
