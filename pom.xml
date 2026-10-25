@@ -13,7 +13,9 @@
         <module>service/MSAccount_HE194622</module>
         <module>service/MSBrand_HE194622</module>
         <module>service/MSWatch_HE194622</module>
+        <module>service/MSOrder_HE194622</module>
         <module>infras/EurekaServer-HE194622</module>
+        <module>service/MSPayment_HE194622</module>
     </modules>
 
     <properties>

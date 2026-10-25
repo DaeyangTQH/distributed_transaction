@@ -8,6 +8,7 @@ import com.haichan.exception.ResourceNotFoundException;
 import com.haichan.repository.WatchCategoryRepository;
 import com.haichan.repository.WatchRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
