@@ -3,6 +3,7 @@ package com.haichan.controller;
 import com.haichan.dto.ApiResponse;
 import com.haichan.dto.OrderRequest;
 import com.haichan.dto.OrderResponse;
+import com.haichan.saga.PlaceOrderSaga;
 import com.haichan.security.AuthAttributes;
 import com.haichan.service.OrderService;
 import jakarta.validation.Valid;
@@ -22,6 +23,7 @@ import java.util.List;
 public class OrderController {
 
     OrderService orderService;
+    PlaceOrderSaga placeOrderSaga;
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<OrderResponse>>> getAll() {
@@ -39,7 +41,7 @@ public class OrderController {
     public ResponseEntity<ApiResponse<OrderResponse>> create(
             @RequestAttribute(AuthAttributes.ACCOUNT_ID) Integer accountId,
             @Valid @RequestBody OrderRequest request) {
-        OrderResponse created = orderService.create(accountId, request);
+        OrderResponse created = placeOrderSaga.execute(accountId, request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.ok("Order created successfully", created));
     }
