@@ -1,10 +1,17 @@
 package com.haichan.service;
 
+import com.haichan.client.BrandClient;
+import com.haichan.dto.StockRequest;
 import com.haichan.dto.WatchRequest;
 import com.haichan.dto.WatchResponse;
+import com.haichan.entity.StockIdempotency;
+import com.haichan.entity.StockOperation;
 import com.haichan.entity.Watch;
 import com.haichan.entity.WatchCategory;
+import com.haichan.exception.BusinessException;
+import com.haichan.exception.ConflictException;
 import com.haichan.exception.ResourceNotFoundException;
+import com.haichan.repository.StockIdempotencyRepository;
 import com.haichan.repository.WatchCategoryRepository;
 import com.haichan.repository.WatchRepository;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +28,8 @@ public class WatchService {
 
     private final WatchRepository watchRepository;
     private final WatchCategoryRepository watchCategoryRepository;
+    private final StockIdempotencyRepository stockIdempotencyRepository;
+    private final BrandClient brandClient;
 
     @Transactional(readOnly = true)
     public List<WatchResponse> getAll() {
@@ -38,6 +47,7 @@ public class WatchService {
 
     @Transactional
     public WatchResponse create(WatchRequest request) {
+        ensureBrandExists(request.getBrandId());
         WatchCategory category = findCategory(request.getCategoryId());
 
         Watch watch = Watch.builder()
@@ -60,6 +70,7 @@ public class WatchService {
         Watch watch = watchRepository.findByIdWithCategory(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Watch not found with id: " + id));
 
+        ensureBrandExists(request.getBrandId());
         WatchCategory category = findCategory(request.getCategoryId());
 
         watch.setName(request.getName());
@@ -76,11 +87,86 @@ public class WatchService {
     }
 
     @Transactional
+    public WatchResponse reserve(Integer id, StockRequest request) {
+        return stockIdempotencyRepository
+                .findByIdempotencyKeyAndOperation(request.getIdempotencyKey(), StockOperation.RESERVE)
+                .map(existing -> replayReserve(existing, id, request.getQuantity()))
+                .orElseGet(() -> doReserve(id, request));
+    }
+
+    private WatchResponse doReserve(Integer id, StockRequest request) {
+        Watch watch = watchRepository.findByIdWithCategory(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Watch not found with id: " + id));
+
+        int quantity = request.getQuantity();
+        int current = watch.getStock() == null ? 0 : watch.getStock();
+        if (current < quantity) {
+            throw new BusinessException("Insufficient stock for watch id: " + id);
+        }
+        watch.setStock(current - quantity);
+        Watch saved = watchRepository.save(watch);
+
+        stockIdempotencyRepository.save(StockIdempotency.builder()
+                .idempotencyKey(request.getIdempotencyKey())
+                .operation(StockOperation.RESERVE)
+                .watchId(id)
+                .quantity(quantity)
+                .build());
+
+        return toResponse(saved);
+    }
+
+    private WatchResponse replayReserve(StockIdempotency existing, Integer id, Integer quantity) {
+        if (!existing.getWatchId().equals(id) || !existing.getQuantity().equals(quantity)) {
+            throw new ConflictException("Idempotency key already used for a different reserve");
+        }
+        return getById(id);
+    }
+
+    @Transactional
+    public WatchResponse restore(Integer id, StockRequest request) {
+        return stockIdempotencyRepository
+                .findByIdempotencyKeyAndOperation(request.getIdempotencyKey(), StockOperation.RESTORE)
+                .map(existing -> replayRestore(existing, id, request.getQuantity()))
+                .orElseGet(() -> doRestore(id, request));
+    }
+
+    private WatchResponse doRestore(Integer id, StockRequest request) {
+        Watch watch = watchRepository.findByIdWithCategory(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Watch not found with id: " + id));
+
+        int quantity = request.getQuantity();
+        int current = watch.getStock() == null ? 0 : watch.getStock();
+        watch.setStock(current + quantity);
+        Watch saved = watchRepository.save(watch);
+
+        stockIdempotencyRepository.save(StockIdempotency.builder()
+                .idempotencyKey(request.getIdempotencyKey())
+                .operation(StockOperation.RESTORE)
+                .watchId(id)
+                .quantity(quantity)
+                .build());
+
+        return toResponse(saved);
+    }
+
+    private WatchResponse replayRestore(StockIdempotency existing, Integer id, Integer quantity) {
+        if (!existing.getWatchId().equals(id) || !existing.getQuantity().equals(quantity)) {
+            throw new ConflictException("Idempotency key already used for a different restore");
+        }
+        return getById(id);
+    }
+
+    @Transactional
     public void delete(Integer id) {
         if (!watchRepository.existsById(id)) {
             throw new ResourceNotFoundException("Watch not found with id: " + id);
         }
         watchRepository.deleteById(id);
+    }
+
+    private void ensureBrandExists(Integer brandId) {
+        brandClient.getById(brandId);
     }
 
     private WatchCategory findCategory(Integer categoryId) {
