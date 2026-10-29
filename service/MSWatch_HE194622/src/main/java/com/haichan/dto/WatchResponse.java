@@ -13,6 +13,7 @@ import java.time.LocalDate;
 @NoArgsConstructor
 @AllArgsConstructor
 public class WatchResponse {
+    private Integer watchId;
     private String name;
     private Integer categoryId;
     private String categoryName;

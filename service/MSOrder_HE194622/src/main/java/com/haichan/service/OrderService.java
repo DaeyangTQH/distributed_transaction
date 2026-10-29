@@ -32,6 +32,13 @@ public class OrderService {
     }
 
     @Transactional(readOnly = true)
+    public List<OrderResponse> getMine(Integer accountId) {
+        return storeOrderRepository.findByAccountIdWithItems(accountId).stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
     public OrderResponse getById(Integer id, Integer accountId) {
         StoreOrder order = findOrder(id);
         if (!order.getAccountId().equals(accountId)) {
