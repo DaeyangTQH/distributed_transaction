@@ -1,6 +1,7 @@
 package com.haichan.controller;
 
 import com.haichan.dto.ApiResponse;
+import com.haichan.dto.StockBatchRequest;
 import com.haichan.dto.StockRequest;
 import com.haichan.dto.WatchRequest;
 import com.haichan.dto.WatchResponse;
@@ -59,6 +60,18 @@ public class WatchController {
             @PathVariable("id") Integer id,
             @Valid @RequestBody StockRequest request) {
         return ResponseEntity.ok(ApiResponse.ok("Stock restored successfully", watchService.restore(id, request)));
+    }
+
+    @PostMapping("/reserve-batch")
+    public ResponseEntity<ApiResponse<Void>> reserveBatch(@Valid @RequestBody StockBatchRequest request) {
+        watchService.reserveBatch(request);
+        return ResponseEntity.ok(ApiResponse.ok("Stock reserved successfully", null));
+    }
+
+    @PostMapping("/restore-batch")
+    public ResponseEntity<ApiResponse<Void>> restoreBatch(@Valid @RequestBody StockBatchRequest request) {
+        watchService.restoreBatch(request);
+        return ResponseEntity.ok(ApiResponse.ok("Stock restored successfully", null));
     }
 
     @DeleteMapping("/{id}")

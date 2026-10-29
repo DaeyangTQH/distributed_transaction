@@ -30,7 +30,11 @@ public class SecurityConfig {
 
     /** Saga/Order will call these later; do not require admin JWT. */
     private boolean isStockAdjustment(HttpServletRequest request) {
-        return HttpMethod.POST.matches(request.getMethod())
-                && request.getRequestURI().matches(".*/api/v1/watches/\\d+/(reserve|restore)");
+        if (!HttpMethod.POST.matches(request.getMethod())) {
+            return false;
+        }
+        String path = request.getRequestURI();
+        return path.matches(".*/api/v1/watches/\\d+/(reserve|restore)")
+                || path.matches(".*/api/v1/watches/(reserve-batch|restore-batch)");
     }
 }

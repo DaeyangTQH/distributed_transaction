@@ -30,6 +30,12 @@ public class OrderController {
         return ResponseEntity.ok(ApiResponse.ok("Orders retrieved successfully", orderService.getAll()));
     }
 
+    @GetMapping("/me")
+    public ResponseEntity<ApiResponse<List<OrderResponse>>> getMine(
+            @RequestAttribute(AuthAttributes.ACCOUNT_ID) Integer accountId) {
+        return ResponseEntity.ok(ApiResponse.ok("Orders retrieved successfully", orderService.getMine(accountId)));
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<OrderResponse>> getById(
             @PathVariable("id") Integer id,

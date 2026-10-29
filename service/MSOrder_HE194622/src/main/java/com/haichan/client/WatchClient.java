@@ -1,6 +1,7 @@
 package com.haichan.client;
 
 import com.haichan.dto.ApiResponse;
+import com.haichan.dto.StockBatchRequest;
 import com.haichan.dto.StockRequest;
 import com.haichan.dto.WatchResponse;
 import org.springframework.cloud.openfeign.FeignClient;
@@ -20,4 +21,10 @@ public interface WatchClient {
     ApiResponse<WatchResponse> restore(
             @PathVariable("id") Integer id,
             @RequestBody StockRequest request);
+
+    @PostMapping("/api/v1/watches/reserve-batch")
+    ApiResponse<Void> reserveBatch(@RequestBody StockBatchRequest request);
+
+    @PostMapping("/api/v1/watches/restore-batch")
+    ApiResponse<Void> restoreBatch(@RequestBody StockBatchRequest request);
 }

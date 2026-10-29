@@ -38,6 +38,9 @@ public class StockIdempotency {
     @Column(name = "Quantity", nullable = false)
     private Integer quantity;
 
+    @Column(name = "Payload", length = 2000)
+    private String payload;
+
     @Column(name = "CreatedAt", nullable = false)
     private LocalDateTime createdAt;
 

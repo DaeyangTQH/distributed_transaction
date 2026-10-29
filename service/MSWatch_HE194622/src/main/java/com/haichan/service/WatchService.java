@@ -1,6 +1,8 @@
 package com.haichan.service;
 
 import com.haichan.client.BrandClient;
+import com.haichan.dto.StockBatchRequest;
+import com.haichan.dto.StockItemRequest;
 import com.haichan.dto.StockRequest;
 import com.haichan.dto.WatchRequest;
 import com.haichan.dto.WatchResponse;
@@ -20,7 +22,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -158,6 +163,87 @@ public class WatchService {
     }
 
     @Transactional
+    public void reserveBatch(StockBatchRequest request) {
+        String payload = toPayload(request.getItems());
+        stockIdempotencyRepository
+                .findByIdempotencyKeyAndOperation(request.getIdempotencyKey(), StockOperation.RESERVE)
+                .ifPresentOrElse(
+                        existing -> replayBatch(existing, payload, "reserve"),
+                        () -> doReserveBatch(request, payload));
+    }
+
+    @Transactional
+    public void restoreBatch(StockBatchRequest request) {
+        String payload = toPayload(request.getItems());
+        stockIdempotencyRepository
+                .findByIdempotencyKeyAndOperation(request.getIdempotencyKey(), StockOperation.RESTORE)
+                .ifPresentOrElse(
+                        existing -> replayBatch(existing, payload, "restore"),
+                        () -> doRestoreBatch(request, payload));
+    }
+
+    private void doReserveBatch(StockBatchRequest request, String payload) {
+        Map<Integer, Integer> totals = new LinkedHashMap<>();
+        for (StockItemRequest item : request.getItems()) {
+            totals.merge(item.getWatchId(), item.getQuantity(), Integer::sum);
+        }
+        for (var entry : totals.entrySet()) {
+            Integer watchId = entry.getKey();
+            Integer quantity = entry.getValue();
+            Watch watch = watchRepository.findById(watchId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Watch not found with id: " + watchId));
+            int current = watch.getStock() == null ? 0 : watch.getStock();
+            if (current < quantity) {
+                throw new BusinessException("Insufficient stock for watch id: " + watchId);
+            }
+            watch.setStock(current - quantity);
+            watchRepository.save(watch);
+        }
+        stockIdempotencyRepository.save(StockIdempotency.builder()
+                .idempotencyKey(request.getIdempotencyKey())
+                .operation(StockOperation.RESERVE)
+                .watchId(request.getItems().getFirst().getWatchId())
+                .payload(payload)
+                .quantity(request.getItems().size())
+                .build());
+    }
+
+    private void doRestoreBatch(StockBatchRequest request, String payload) {
+        Map<Integer, Integer> totals = new LinkedHashMap<>();
+        for (StockItemRequest item : request.getItems()) {
+            totals.merge(item.getWatchId(), item.getQuantity(), Integer::sum);
+        }
+        for (var entry : totals.entrySet()) {
+            Integer watchId = entry.getKey();
+            Integer quantity = entry.getValue();
+            Watch watch = watchRepository.findById(watchId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Watch not found with id: " + watchId));
+            int current = watch.getStock() == null ? 0 : watch.getStock();
+            watch.setStock(current + quantity);
+            watchRepository.save(watch);
+        }
+        stockIdempotencyRepository.save(StockIdempotency.builder()
+                .idempotencyKey(request.getIdempotencyKey())
+                .operation(StockOperation.RESTORE)
+                .watchId(request.getItems().getFirst().getWatchId())
+                .payload(payload)
+                .quantity(request.getItems().size())
+                .build());
+    }
+
+    private void replayBatch(StockIdempotency existing, String payload, String operation) {
+        if (existing.getPayload() == null || !existing.getPayload().equals(payload)) {
+            throw new ConflictException("Idempotency key already used for a different " + operation + " batch");
+        }
+    }
+
+    private String toPayload(List<StockItemRequest> items) {
+        return items.stream()
+                .map(item -> item.getWatchId() + ":" + item.getQuantity())
+                .collect(Collectors.joining(","));
+    }
+
+    @Transactional
     public void delete(Integer id) {
         if (!watchRepository.existsById(id)) {
             throw new ResourceNotFoundException("Watch not found with id: " + id);
@@ -176,6 +262,7 @@ public class WatchService {
 
     private WatchResponse toResponse(Watch watch) {
         return WatchResponse.builder()
+                .watchId(watch.getWatchId())
                 .name(watch.getName())
                 .categoryId(watch.getCategory().getCategoryId())
                 .categoryName(watch.getCategory().getCategoryName())
